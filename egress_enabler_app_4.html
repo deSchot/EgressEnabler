@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Egress Enabler — Live Egressibility Assessor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --ink:#15201c; --paper:#f4f1e8; --card:#fbfaf4; --line:#d8d2c0;
+    --accent:#1f6f5c; --accent2:#c8531f; --gold:#b8893a;
+    --good:#2f7d5b; --warn:#c89a2b; --bad:#bb4421;
+    --muted:#6b6657; --shadow:0 2px 0 rgba(21,32,28,.06),0 10px 30px -12px rgba(21,32,28,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(circle at 15% -10%, rgba(31,111,92,.06), transparent 40%),
+      radial-gradient(circle at 100% 0%, rgba(200,83,31,.05), transparent 35%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:0 22px 80px}
+
+  /* Header */
+  header{padding:38px 0 26px;border-bottom:1px solid var(--line);margin-bottom:4px}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(30px,5vw,52px);line-height:1.02;margin:.18em 0 .12em;letter-spacing:-.01em}
+  .sub{color:var(--muted);max-width:62ch;font-size:15px}
+  .sub b{color:var(--ink);font-weight:600}
+  .credit{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);margin-top:14px;letter-spacing:.02em}
+
+  /* Layout */
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:26px;margin-top:26px;align-items:start}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+
+  /* Sticky results panel */
+  .panel{position:sticky;top:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+  .card-pad{padding:20px}
+  .card h2{font-family:'Fraunces',serif;font-weight:600;font-size:19px;margin:0 0 2px}
+  .card .note{font-size:12px;color:var(--muted);margin:0 0 16px}
+
+  .scorebig{display:flex;align-items:baseline;gap:10px;margin:6px 0 2px}
+  .scorebig .n{font-family:'Fraunces',serif;font-size:54px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .scorebig .lab{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
+  .stars{font-size:22px;letter-spacing:3px;margin:8px 0 2px;color:var(--gold)}
+  .stars .empty{color:var(--line)}
+  .ratingword{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+
+  .barrow{display:grid;grid-template-columns:30px 1fr 46px;gap:8px;align-items:center;padding:3px 0;font-size:12px}
+  .barrow .code{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;color:var(--ink)}
+  .bartrack{height:13px;background:#ece8da;border-radius:7px;overflow:hidden;position:relative}
+  .barfill{height:100%;border-radius:7px;transition:width .45s cubic-bezier(.2,.8,.2,1),background .3s}
+  .barval{font-family:'IBM Plex Mono',monospace;font-size:11px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+  .barrow:hover .code{color:var(--accent)}
+  .barrow .delta{font-family:'IBM Plex Mono',monospace;font-size:10px}
+
+  /* Impact (Figure-3) mode toggle */
+  .modebar{display:flex;gap:6px;background:#ece8da;padding:4px;border-radius:10px;margin-bottom:14px}
+  .modebar button{flex:1;border:0;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.04em;
+    padding:8px 6px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:600;text-transform:uppercase}
+  .modebar button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+
+  .baseline-tag{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:999px;border:1px solid var(--line);cursor:pointer;background:var(--card);color:var(--ink);font-weight:600}
+  .pill:hover{border-color:var(--accent);color:var(--accent)}
+  .pill.solid{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  .legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:10px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .swatch{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  /* bar with inline description label */
+  .barrow .lbl{font-size:11px;line-height:1.25;color:var(--ink)}
+  .barrow .lbl .fl-desc{color:var(--muted);font-size:10.5px}
+  .barrow-wide{display:grid;grid-template-columns:26px 1fr 42px;gap:9px;align-items:center;padding:5px 0;border-top:1px dotted var(--line)}
+  .barrow-wide:first-child{border-top:0}
+  .barrow-wide .code{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;color:var(--accent)}
+  .barrow-wide .bartrack{height:11px;background:#ece8da;border-radius:7px;overflow:hidden;position:relative}
+  .barrow-wide:hover .lbl{color:var(--accent)}
+
+  /* Personal component reference card */
+  .pc-card{margin-top:18px}
+  .pc-intro{font-size:12px;color:var(--muted);margin:0 0 12px}
+  .pc-list{display:flex;flex-direction:column;gap:0}
+  .pc-row{display:grid;grid-template-columns:34px 1fr;gap:10px;padding:7px 0;border-top:1px solid var(--line);align-items:baseline}
+  .pc-row:first-child{border-top:0}
+  .pc-row .pc-code{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px;color:#fff;background:var(--accent);border-radius:6px;text-align:center;padding:3px 0;align-self:start}
+  .pc-row .pc-name{font-size:13px;line-height:1.35}
+  .pc-row .pc-max{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-top:1px}
+
+  /* Main column */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.03em;border:1px solid var(--line);
+    background:var(--card);color:var(--ink);padding:9px 15px;border-radius:9px;cursor:pointer;transition:.15s;text-transform:uppercase}
+  .btn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+  .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .btn.primary:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.warn:hover{border-color:var(--accent2);color:var(--accent2)}
+
+  /* Sub-scale block */
+  .subscale{margin-bottom:16px}
+  .sub-head{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px 12px 0 0;
+    border-bottom:0;padding:14px 18px;cursor:pointer;user-select:none}
+  .sub-head:hover{background:#fdfcf6}
+  .sub-head .chev{font-family:'IBM Plex Mono',monospace;color:var(--muted);transition:transform .2s;font-size:13px}
+  .sub-head.open .chev{transform:rotate(90deg)}
+  .sub-head .type{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-weight:600}
+  .sub-head h3{font-family:'Fraunces',serif;font-weight:600;font-size:18px;margin:1px 0 0}
+  .sub-head .scoretag{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+  .sub-head .scoretag b{color:var(--ink);font-size:15px}
+  .wmini{display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+  .wmini input{width:54px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-family:'IBM Plex Mono',monospace;font-size:12px;text-align:center;background:#fff}
+
+  .items{border:1px solid var(--line);border-top:0;border-radius:0 0 12px 12px;background:var(--card);overflow:hidden}
+  .items.collapsed{display:none}
+  .item{display:grid;grid-template-columns:46px 1fr auto;gap:14px;align-items:start;padding:13px 18px;border-top:1px solid var(--line)}
+  .item:first-child{border-top:0}
+  .item:hover{background:#fdfcf6}
+  .item .id{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);padding-top:3px;font-weight:500}
+  .item .txt{font-size:13.5px;line-height:1.45}
+  .item .meta{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.02em}
+  .item.flagged{background:linear-gradient(90deg,rgba(187,68,33,.07),transparent 60%)}
+  .item.flagged:hover{background:linear-gradient(90deg,rgba(187,68,33,.1),transparent 60%)}
+
+  .toggle{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600}
+  .toggle button{border:0;background:#fff;padding:7px 12px;cursor:pointer;color:var(--muted);min-width:46px;transition:.12s}
+  .toggle button:first-child{border-right:1px solid var(--line)}
+  .toggle button.on-yes{background:var(--good);color:#fff}
+  .toggle button.on-no{background:var(--bad);color:#fff}
+  .toggle button.compliant-hint{position:relative}
+
+  .greynote{font-size:11px;color:var(--muted);font-style:italic;margin-top:3px}
+
+  /* Add sub-scale */
+  .addbox{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:18px;margin-bottom:24px}
+  .addbox h3{font-family:'Fraunces',serif;font-size:16px;margin:0 0 12px}
+  .addrow{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+  .field label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+  .field select,.field input{border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:'IBM Plex Sans';font-size:13px;background:#fff;min-width:160px}
+
+  footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);max-width:80ch}
+  footer a{color:var(--accent)}
+  .disclaim{font-size:11px;font-style:italic;margin-top:8px}
+
+  .empty-state{text-align:center;padding:50px 20px;color:var(--muted)}
+  .empty-state .big{font-family:'Fraunces',serif;font-size:20px;color:var(--ink);margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Egressibility Instrument · Live Demo</div>
+    <h1>The Egress Enabler</h1>
+    <p class="sub">A browser-native rebuild of the Smedberg et&nbsp;al. (2023) egressibility instrument. Mark each environmental barrier <b>compliant</b> or <b>non-compliant</b> and watch the Egress Enabler Score recompute across all 14 functional limitations — then flip to <b>Impact mode</b> to see how your design changes move egressibility, à la Figure&nbsp;3 of the paper.</p>
+    <div class="credit">Method: Smedberg, Slaug, Carlsson, Gefenaite, Schmidt &amp; Ronchi · Disability and Health Journal 16 (2023) 101396 · CC BY-NC-ND 4.0 — Rebuilt for demonstration; not the official tool.<br>Rebuild by Luke de Schot.</div>
+  </header>
+
+  <div class="grid">
+    <!-- RESULTS PANEL -->
+    <aside class="panel">
+      <div class="card card-pad">
+        <div class="modebar">
+          <button id="mode-live" class="on" onclick="setMode('live')">Score</button>
+          <button id="mode-impact" onclick="setMode('impact')">Impact</button>
+        </div>
+
+        <div id="live-view">
+          <h2>Egress Enabler Score</h2>
+          <p class="note">Higher score = more egressibility issues found.</p>
+          <div class="scorebig"><span class="n" id="tees">0</span><span class="lab">Total EES<br>/ 1314 max</span></div>
+          <div class="stars" id="overall-stars"></div>
+          <div class="ratingword" id="overall-word">awaiting input</div>
+          <div style="margin-top:18px" id="fl-bars"></div>
+          <div class="legend">
+            <span><i class="swatch" style="background:var(--good)"></i>low</span>
+            <span><i class="swatch" style="background:var(--warn)"></i>moderate</span>
+            <span><i class="swatch" style="background:var(--bad)"></i>high issue load</span>
+          </div>
+        </div>
+
+        <div id="impact-view" style="display:none">
+          <h2>Impact of Design Changes</h2>
+          <p class="note">Change in EES per functional limitation, relative to a saved baseline. Bars right (red) = egressibility got <b>worse</b>; left (green) = <b>better</b>.</p>
+          <div class="baseline-tag">
+            <span id="baseline-status">No baseline saved.</span>
+            <button class="pill solid" onclick="saveBaseline()">Save current as baseline</button>
+            <button class="pill" onclick="clearBaseline()">Clear</button>
+          </div>
+          <div id="impact-bars"></div>
+          <div class="legend">
+            <span><i class="swatch" style="background:var(--good)"></i>more egressible</span>
+            <span><i class="swatch" style="background:var(--bad)"></i>less egressible</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-pad pc-card">
+        <h2>Personal Component</h2>
+        <p class="pc-intro">The 14 functional limitations (A–M) the score is computed against. In the Egress Enabler these classify <i>where</i> egressibility issues fall rather than describing any one individual. Max = highest possible score per limitation.</p>
+        <div class="pc-list" id="pc-list"></div>
+      </div>
+    </aside>
+
+    <!-- MAIN COLUMN -->
+    <main>
+      <div class="toolbar">
+        <button class="btn primary" onclick="loadExample()">Load worked example</button>
+        <button class="btn warn" onclick="resetAll()">Reset all to compliant</button>
+        <button class="btn" onclick="exportCSV()">Export CSV</button>
+        <button class="btn" onclick="window.print()">Print / PDF</button>
+      </div>
+
+      <div class="addbox">
+        <h3>Add a sub-scale</h3>
+        <div class="addrow">
+          <div class="field">
+            <label>Component type</label>
+            <select id="add-type"></select>
+          </div>
+          <div class="field">
+            <label>Name / location</label>
+            <input id="add-name" placeholder="e.g. North stair, Level 2">
+          </div>
+          <button class="btn primary" onclick="addSubscale()">+ Add</button>
+        </div>
+      </div>
+
+      <div id="subscales"></div>
+    </main>
+  </div>
+
+  <footer>
+    <b>How scoring works.</b> Each barrier item carries a 14-value scoring pattern (severity 0–4) — one value per functional limitation. When you mark an item non-compliant (the grey answer in the original), its pattern is added to the running score for each limitation. Sub-scales of the same type are weighted to sum to 1, so buildings of differing complexity stay comparable. Star rating reflects EES ÷ the published per-limitation maximum (0 issues = 4★; ≥75% of max = 0★).
+    <div class="disclaim">Disclaimer (per the original authors): intended only to supplement the informed judgment of users competent in human behaviour in fire, fire safety, human functioning and accessibility. All results require evaluation by an informed user. This rebuild is for demonstration and may differ from the official application.</div>
+  </footer>
+</div>
+
+<script>
+const EE = {"FL":["A","B1","B2","C","D","E","F","G","H","I","J","K","L","M"],"meta":{"notification":{"name":"Notification System","sub":"Systems to notify occupants of imminent threats"},"signage":{"name":"Signage","sub":"Wayfinding signage to direct occupants"},"circulation":{"name":"Circulation Space","sub":"Horizontal spaces — rooms, corridors"},"refuge":{"name":"Refuge Area","sub":"Safe areas to await assistance"},"oee":{"name":"Occupant Evacuation Elevator","sub":"Elevators safe to use in emergency"},"ramp":{"name":"Ramp","sub":"Sloping surfaces for vertical transport"},"stair":{"name":"Stair","sub":"Stairs used during egress"},"door":{"name":"Door","sub":"Exit doors used during egress"},"outside":{"name":"Outside Environment","sub":"Route from exit to assembly point"}},"components":{"notification":[{"id":101,"text":"Is there an evacuation alarm with auditory signals?","trigger":"no","pattern":[1,3,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":102,"text":"Does the audible alarm include sounds at lower frequencies (i.e. not only 2500 Hz or more)?","trigger":"no","pattern":[0,0,0,2,0,0,0,0,0,0,0,0,0,0]},{"id":103,"text":"The sound pressure level of the evacuation alarm is less than 70dBA or less than 10dBA above ambient sound (measured at the maximum distance from alarm), or louder than 110dBA (measured at the minimum distance from alarm).","trigger":"yes","pattern":[2,0,0,4,0,0,0,0,0,0,0,0,0,0]},{"id":104,"text":"Is there an evacuation alarm with visual signals that can be seen througout the area that the sub-scale refer to?","trigger":"no","pattern":[1,0,0,2,0,0,0,0,0,0,0,0,0,0]},{"id":105,"text":"IF NO TO #104: Is there complimentary visual signals in spaces where a person might be alone, e.g. in accessible bathrooms?","trigger":"no","pattern":[1,0,0,4,0,0,0,0,0,0,0,0,0,0]},{"id":106,"text":"Visual signals are presented 180 cm or higher from the floor.","trigger":"no","pattern":[0,2,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":107,"text":"If people are expected to be sleeping in the area: 1) is the alarm complemented with a low-frequency alarm (aprox 520 Hz) OR 2) is the bed or similar equipped with a vibrating device (bed-shaker or pillow-shaker)?","trigger":"no","pattern":[0,0,0,3,0,0,0,0,0,0,0,0,0,0]}],"signage":[{"id":201,"text":"Signs are posted and arranged along circulation paths to adequately show how to get to the nearest exit and are clearly visible and not blocked by other objects. Notice the difference between this item and item 210.","trigger":"no","pattern":[2,2,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":202,"text":"Signs are posted and arranged along circulation paths to adequately show how to get to the nearest exit and are in tactile text or in braille.","trigger":"no","pattern":[0,0,1,0,0,0,0,0,0,0,0,0,0,0]},{"id":203,"text":"Emergency exits are clearly marked with appropriate signage.","trigger":"no","pattern":[2,2,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":204,"text":"Are the evacuation signs internally illuminated?","trigger":"no","pattern":[0,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":205,"text":"Pictorial symbols are included on evacuation signs.","trigger":"no","pattern":[2,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":206,"text":"If there are evacuation paths involving stairs, evacuation paths not involving stairs are indicated as accessible via signage.","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,3]},{"id":207,"text":"If an exit or path involves stairs, the direction to the closest exit or path without stairs is given.","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":208,"text":"Are evacuation signage involving text that are located within reach complemented with tactile information?","trigger":"no","pattern":[0,1,1,0,0,0,0,0,0,0,0,0,0,0]},{"id":209,"text":"Is the height of evacuation signage greater than (viewing distance (m) / constant)? The constant is 200 for internally illuminated signs, and 100 for other signs.","trigger":"no","pattern":[1,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":210,"text":"There are brightly lit signs, displays, or other lit objects in or near the line of vision that obstruct exits signs or distract attention from them. Examples include advertisment banners and other information displays. Notice the difference between this item and item 201.","trigger":"yes","pattern":[1,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":211,"text":"Are there audio instructions (directional sound system or similar) to aid orientation?","trigger":"no","pattern":[1,2,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":212,"text":"Are there tacticle maps/evacuation plans near the main entrance, and is there a tactile path leading to them?","trigger":"no","pattern":[0,1,2,0,0,0,0,0,0,0,0,0,0,0]}],"circulation":[{"id":301,"text":"Is the circulation path sufficiently wide? (at least 150 cm at all places)","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":302,"text":"Is the clear height at least 200 cm?","trigger":"no","pattern":[0,1,3,0,1,1,0,2,0,0,0,3,1,0]},{"id":303,"text":"There are obstructions (e.g. furniture, equipment, protruding objects) on the evacuation paths.","trigger":"yes","pattern":[0,2,3,0,1,1,0,0,0,0,0,0,2,3]},{"id":304,"text":"The walking distance to the nearest emergency exit exceeds 60 meters.","trigger":"yes","pattern":[0,0,1,0,0,0,4,0,0,0,0,0,2,3]},{"id":305,"text":"Are there steep gradients in the circulation path's walking direction (more than 1:20), or is there a steep cross slope (more than 1:48)?","trigger":"yes","pattern":[0,0,0,0,3,3,3,0,0,0,0,0,3,4]},{"id":306,"text":"Are there thresholds higher than 15 mm? 30 mm thresholds are allowed if there are sloped edges.","trigger":"yes","pattern":[0,2,3,0,3,3,0,0,0,0,0,0,3,4]},{"id":307,"text":"Is it possible to rest during the evacuation without hindering others? Required at least every six meters (travel distance).","trigger":"no","pattern":[0,0,0,0,2,2,3,0,0,0,0,0,3,3]},{"id":308,"text":"Are the escape routes used in general circulation.","trigger":"no","pattern":[3,2,4,0,0,0,0,0,0,0,0,0,0,0]},{"id":309,"text":"The escape route is illogical and/or complicated. Examples include routes with many turns and/or doors.","trigger":"yes","pattern":[3,1,3,0,0,0,0,0,0,0,0,0,1,1]},{"id":310,"text":"Visual contrast is provided on evacuation routes to minimize falling risks.","trigger":"no","pattern":[1,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":311,"text":"Are there sufficient tactile cues of abrupt level changes/other hazards?","trigger":"no","pattern":[0,2,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":312,"text":"Is the surface regular/even (without joins, sloping sections, cracks, and holes larger than 5 mm in the direcion of travel), and slip-free?","trigger":"no","pattern":[0,2,3,0,1,1,0,0,0,0,0,1,3,3]},{"id":313,"text":"If there is carpeting, does it make wheelchair travel difficult?","trigger":"yes","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":314,"text":"Excessive queuing is expected on horizontal egress components.","trigger":"yes","pattern":[0,0,1,0,3,2,3,1,0,0,0,0,3,3]},{"id":315,"text":"Is lighting sufficient, non-blinding and without sharp reflexes? Refers to situations where there is a power outage.","trigger":"no","pattern":[1,2,0,0,1,2,0,0,0,0,0,0,0,0]},{"id":316,"text":"Evacuation is expected to occur through windows.","trigger":"yes","pattern":[0,1,2,0,3,3,0,0,2,0,4,3,4,4]},{"id":317,"text":"Is it possible to relocate to a safe place outside the building without using stairs, ramp or OEE from the circulation space? A refuge area is not considered a safe place outside the building.","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":318,"text":"IF NO TO #317: Is it possible to relocate horizontally to a safer place (another fire compartment) to avoid using the stairs? A refuge area is an example of a safer place, but it could also be another fire compartment.","trigger":"no","pattern":[0,0,1,0,1,1,3,0,0,0,0,2,3,4]},{"id":319,"text":"IF NO TO #317: is a ramp, OEE or area of refuge available in close connection to stairs to allow for relocation to a safe place outside the building?","trigger":"no","pattern":[0,0,0,0,2,2,3,0,0,0,0,2,3,4]},{"id":320,"text":"IF NO TO #317: Is there a ramp available to egress from the circulation space to a safe place outside the building? (IF YES: evaluate the ramp and the stair; IF NO: evaluate stair) The scores in the scoring pattern reflects the presence of a fully non-compliant ramp.","trigger":"no","pattern":[6,19,26,3,31,21,15,1,0,1,0,0,34,34]},{"id":321,"text":"IF NO TO #320: Is there a refuge area available to egress from the circulation space? (IF YES: evaluate all refuge areas) The scores in the scoring pattern reflects the presence of a fully non-compliant refuge area.","trigger":"no","pattern":[14,6,9,4,3,5,4,1,3,6,7,3,22,28]},{"id":322,"text":"IF NO TO #320: Is there an OEE available to egress from the circulation space to a safe place outside the building? (IF YES: evaluate all OEE's) The scores in the scoring pattern reflects the presence of a fully non-compliant OEE.","trigger":"no","pattern":[16,13,17,6,11,11,5,0,3,6,7,2,26,28]}],"refuge":[{"id":401,"text":"Is there sufficient manoeuvring spaces where turning is necessary? (at least 1,3 x 1,3 m)","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":402,"text":"Are there at least two independent refuge areas where necessary?","trigger":"no","pattern":[0,0,0,0,2,2,3,0,0,0,0,2,3,4]},{"id":403,"text":"The refuge area is large enough to accomodate the needed number of occupants (70*130 cm * Total occupancy * 0,01; minimum 70*130 cm).","trigger":"no","pattern":[0,0,0,0,1,1,1,0,0,0,0,1,3,4]},{"id":404,"text":"Is there information in the refuge area that the refuge area is a safe environment in case of fire?","trigger":"no","pattern":[3,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":405,"text":"Are signs in the refuge area equipped with appropriate size letters?","trigger":"no","pattern":[1,1,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":406,"text":"Are signs in the refuge area equipped with tactile letters or braille letters?","trigger":"no","pattern":[0,2,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":407,"text":"If there are controls in the refuge area, are the controls illogically designed? Exampels include too many controls, or inproper signage. Examples of controls include communication device controls.","trigger":"yes","pattern":[4,2,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":408,"text":"Does the refuge area have controls that require complex manoeuvres and good precision?","trigger":"yes","pattern":[2,1,2,0,0,2,0,0,0,3,3,0,1,0]},{"id":409,"text":"Does the refuge area have controls that require use of hands?","trigger":"yes","pattern":[0,0,0,0,0,0,0,0,0,3,4,0,1,0]},{"id":410,"text":"Are there communication possibilities in the refuge area?","trigger":"no","pattern":[2,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":411,"text":"IF yes to #410: is there only one-way communication?","trigger":"yes","pattern":[2,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":412,"text":"Is there a dedicated way for a person with a hearing or speech impairment to communicate from the refuge area?","trigger":"no","pattern":[0,0,0,4,0,0,0,0,0,0,0,0,0,0]},{"id":413,"text":"Are the emergency communication device located 80 cm (+- 10 cm) from the floor?","trigger":"no","pattern":[0,0,1,0,0,0,0,1,3,0,0,0,2,4]}],"oee":[{"id":501,"text":"The OEE is clearly indicated as such (i.e. safe to use for evacuation).","trigger":"no","pattern":[3,0,0,0,0,0,0,0,0,0,0,0,2,3]},{"id":502,"text":"Are signs inside and outside the OEE printed with proper contrast?","trigger":"no","pattern":[0,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":503,"text":"Is there audio information/signal indicating OEE arrival?","trigger":"no","pattern":[1,2,4,0,0,0,0,0,0,0,0,0,0,0]},{"id":504,"text":"Is there visual information/signal located 180 cm or more from the floor indicating OEE arrival?","trigger":"no","pattern":[0,0,0,2,0,0,0,0,0,0,0,0,0,1]},{"id":505,"text":"Do OEE signals indicate the direction of the lift?","trigger":"no","pattern":[1,0,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":506,"text":"Is the OEE door power operated, remains open for at least 20 seconds when activated, and reopens automatically when obstructed by an object or person?","trigger":"no","pattern":[0,0,0,0,3,3,0,0,0,0,0,0,3,4]},{"id":507,"text":"Can the OEE be used without assistance from others (staff or similar)?","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,2,3]},{"id":508,"text":"Is there a communication system by the OEE?","trigger":"no","pattern":[3,0,0,0,0,0,0,0,0,0,0,0,1,2]},{"id":509,"text":"Is there a dedicated way for a person with a hearing or speech impairment to communicate by the OEE?","trigger":"no","pattern":[0,0,0,4,0,0,0,0,0,0,0,0,0,0]},{"id":510,"text":"Is there sufficient space in the OEE (at least 200*140 cm)?","trigger":"no","pattern":[0,0,0,0,1,1,0,0,0,0,0,0,3,4]},{"id":511,"text":"Does the OEE stop at the same level as the building floor, and is the gap between the OEE and the building floor less than 3 cm?","trigger":"no","pattern":[1,1,2,0,2,2,0,0,0,0,0,1,3,4]},{"id":512,"text":"Are there handrails in the OEE?","trigger":"no","pattern":[0,0,1,0,3,3,3,0,0,0,0,0,3,0]},{"id":513,"text":"Is there a seat in the OEE?","trigger":"no","pattern":[0,0,0,0,1,1,2,0,0,0,0,1,3,0]},{"id":514,"text":"Is there enough of clear space for a person to approach and reach the controls and use the OEE? (at least 80*120 cm)?","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,2,3]},{"id":515,"text":"There are illogically designed controls inside and/or outside the OEE.","trigger":"yes","pattern":[4,2,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":516,"text":"Are controls inside and/or outside the OEE placed within height 0.9-1.0 m?","trigger":"no","pattern":[0,0,1,0,0,0,0,0,3,0,0,0,2,4]},{"id":517,"text":"Does the OEE have controls inside and/or outside the OEE that require complex manoeuvres and good precision?","trigger":"yes","pattern":[2,1,2,0,1,0,0,0,0,3,3,0,1,0]},{"id":518,"text":"Does the OEE have controls inside and/or outside the OEE that require use of hands?","trigger":"yes","pattern":[0,0,0,0,0,1,0,0,0,3,4,0,1,0]},{"id":519,"text":"Are the control buttons inside and/or outside the OEE equipped with tactile characters or braille?","trigger":"no","pattern":[0,2,4,0,0,0,0,0,0,0,0,0,0,0]},{"id":520,"text":"Do floor buttons inside the OEE have visual indicators to show each floor destination?","trigger":"no","pattern":[1,2,0,0,0,0,0,0,0,0,0,0,0,0]}],"ramp":[{"id":601,"text":"Is the clear width at least 90 cm?","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":602,"text":"There are obstructions (e.g. furniture, equipment, protruding object) on the ramp.","trigger":"yes","pattern":[0,2,3,0,1,1,0,0,0,0,0,0,2,3]},{"id":603,"text":"Is there a level landing where the ramp changes direction that is at least 150 x 150 cm?","trigger":"no","pattern":[0,0,0,0,1,1,0,0,0,0,0,0,3,4]},{"id":604,"text":"Is it possible to rest during the evacuation without hindering others? Resting places are required every six meters (travel distance).","trigger":"no","pattern":[0,0,0,0,3,3,3,0,0,0,0,0,3,3]},{"id":605,"text":"Is the ramp steeper than 1:20 in the travel direction?","trigger":"yes","pattern":[0,0,0,0,3,3,3,0,0,0,0,0,3,4]},{"id":606,"text":"Is there a steep cross slope (more than 1:48)?","trigger":"yes","pattern":[0,0,0,0,3,3,3,0,0,0,0,0,3,4]},{"id":607,"text":"Are there sufficient tactile cues of abrupt level changes/other hazards?","trigger":"no","pattern":[0,2,4,0,0,0,0,0,0,0,0,0,0,0]},{"id":608,"text":"The route to the ramp is illogical and/or complicated. Examples include routes with many turns or if it is hidden.","trigger":"yes","pattern":[3,1,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":609,"text":"Is there protection (4 cm or higher) against slipping off?","trigger":"no","pattern":[0,1,3,0,1,0,0,0,0,0,0,0,3,3]},{"id":610,"text":"Does the surface of the ramp extend at least 30 cm beyond the inside face of the handrail?","trigger":"no","pattern":[0,1,3,0,1,0,0,0,0,0,0,0,2,3]},{"id":611,"text":"Visual contrast is provided on the ramp and handrails to minimize falling risks.","trigger":"no","pattern":[1,3,0,0,2,0,0,0,0,0,0,0,0,0]},{"id":612,"text":"Excessive queuing is expected.","trigger":"yes","pattern":[0,0,0,3,3,3,0,0,0,0,0,0,3,3]},{"id":613,"text":"Is lighting sufficient, non-blinding and without sharp reflexes? This refers to situations where there is a power outage.","trigger":"no","pattern":[1,2,0,0,2,0,0,0,0,0,0,0,0,0]},{"id":614,"text":"Are there handrails on both sides?","trigger":"no","pattern":[0,1,3,0,2,2,3,0,0,0,0,0,2,0]},{"id":615,"text":"Do handrails have at least 30 cm extensions at both top and bottom?","trigger":"no","pattern":[0,1,2,0,2,2,1,0,0,0,0,0,2,0]},{"id":616,"text":"Are handrails placed at 85-95 cm of height?","trigger":"no","pattern":[0,1,1,0,1,1,1,0,0,0,0,0,1,0]},{"id":617,"text":"Is the handrail gripping surface continuous, obstructed along the top or sides, and easy to grip with one hand (i.e. not too big or small)?","trigger":"no","pattern":[0,1,1,0,1,1,1,0,0,1,0,0,1,0]},{"id":618,"text":"Ramp includes see-through material. Examples include grated steel.","trigger":"yes","pattern":[1,1,0,0,3,0,0,1,0,0,0,0,0,0]},{"id":619,"text":"Is the ramp's surface regular/even (without joins, cracks, and holes larger than 5 mm in the direction of travel) and slip-free?","trigger":"no","pattern":[0,2,3,0,2,1,0,0,0,0,0,0,3,3]}],"stair":[{"id":701,"text":"Are there tactile cues to stairway in the circulation path?","trigger":"no","pattern":[0,1,4,0,0,0,0,0,0,0,0,0,0,0]},{"id":702,"text":"Is the clear width at least 120 cm at all places?","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,1,3,4]},{"id":703,"text":"Is the clear height at least 200 cm?","trigger":"no","pattern":[0,1,3,0,1,0,0,2,0,0,0,3,0,0]},{"id":704,"text":"Are there obstructions (e.g. furniture, equipment, protruding objects) on the evacuation paths?","trigger":"yes","pattern":[0,2,3,0,1,1,0,0,0,0,0,0,2,3]},{"id":705,"text":"The stair is used in general circulation.","trigger":"no","pattern":[4,3,4,0,0,0,0,0,0,0,0,0,0,0]},{"id":706,"text":"The vertical distance of the stair exceeds 15 m.","trigger":"yes","pattern":[0,0,1,0,0,0,4,0,0,0,0,4,4,4]},{"id":707,"text":"Is it possible to rest during the evacuation without hindering others? Resting places are required at least every six meters (diagonal distance).","trigger":"no","pattern":[0,0,0,0,3,3,3,0,0,0,0,3,3,3]},{"id":708,"text":"Is there a resting area in front of the stair (max 1:50, at least 150*150 cm)?","trigger":"no","pattern":[0,0,0,0,3,3,3,0,0,0,0,2,3,3]},{"id":709,"text":"Is it a spiral stair?","trigger":"yes","pattern":[0,1,2,0,3,3,3,1,0,0,0,2,4,4]},{"id":710,"text":"A stair-descent device is provided.","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,2,3]},{"id":711,"text":"The provided stair-descent device requires transfer from wheelchair or other mobility aid.","trigger":"yes","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,2,3]},{"id":712,"text":"Are there trained staff available to aid with the use of the stair-descent device?","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,2,3]},{"id":713,"text":"Excessive queuing is expected.","trigger":"yes","pattern":[0,1,2,0,3,2,3,1,0,0,0,0,3,3]},{"id":714,"text":"Visual contrast is provided on handrails.","trigger":"no","pattern":[1,3,0,0,2,0,0,0,0,0,0,0,0,0]},{"id":715,"text":"Are there visual patterns on the surface of stair treads that make edges of treads distinct?","trigger":"no","pattern":[1,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":716,"text":"Is lighting sufficient, non-blinding and without sharp reflexes? This refers to situations where there is a power outage.","trigger":"no","pattern":[1,2,0,0,2,0,0,0,0,0,0,0,0,0]},{"id":717,"text":"Stairs include see-through material. Examples include grated steel.","trigger":"yes","pattern":[1,1,0,0,3,0,0,1,0,0,0,0,0,0]},{"id":718,"text":"Are the steps with projecting nosing?","trigger":"yes","pattern":[1,2,3,0,2,3,0,0,0,0,0,0,0,0]},{"id":719,"text":"Are there tactile cues on the first and last step?","trigger":"no","pattern":[0,1,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":720,"text":"Are stair treads regular and with at least 26 cm depth, and are the stair risers regular and of 15-17 cm height?","trigger":"no","pattern":[0,3,3,0,3,3,3,0,0,0,0,2,0,0]},{"id":721,"text":"Are the stair treads even (without joins, sloping sections, cracks, and holes larger than 5 mm) and slip-free?","trigger":"no","pattern":[0,2,3,0,1,1,0,0,0,0,0,1,3,0]},{"id":722,"text":"Are there handrails on both sides?","trigger":"no","pattern":[0,2,3,0,3,2,3,0,0,0,0,0,3,0]},{"id":723,"text":"Do handrails have at least 30 cm extensions at both top and bottom?","trigger":"no","pattern":[0,1,3,0,3,2,1,0,0,0,0,0,3,0]},{"id":724,"text":"Are handrails placed at 85-95 cm of height?","trigger":"no","pattern":[0,1,1,0,1,1,1,0,0,0,0,0,1,0]},{"id":725,"text":"Is the handrail gripping surface continuous, obstructed along the top or sides, and easy to grip with one hand (i.e. not too big or small)?","trigger":"no","pattern":[0,1,1,0,1,1,1,0,0,1,0,0,1,0]}],"door":[{"id":801,"text":"Does the door opening have at least 80 cm clearance?","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,4]},{"id":802,"text":"Is the clear height of the door at least 200 cm?","trigger":"no","pattern":[0,1,3,0,1,1,0,2,0,0,0,3,0,0]},{"id":803,"text":"Is there sufficient manoeuvring space in front of the door? (at least 1,5 x 1,5m and 70 cm on the opening side)","trigger":"no","pattern":[0,0,0,0,1,1,1,0,0,0,0,0,3,4]},{"id":804,"text":"The evacuation door is easily detected as such (e.g through signage or contrasting colour).","trigger":"no","pattern":[2,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":805,"text":"Is the door opened in the evacuation direction?","trigger":"no","pattern":[1,0,1,0,1,1,0,0,1,0,1,0,2,3]},{"id":806,"text":"Are operable parts of the door hardware within 80-120 cm from the floor?","trigger":"no","pattern":[0,0,2,0,0,0,0,0,2,0,0,0,2,3]},{"id":807,"text":"Does the door have a complicated or illogical opening procedure?","trigger":"yes","pattern":[4,2,4,0,0,0,0,0,0,1,0,0,0,0]},{"id":808,"text":"Does the door have hardware that is operable with one hand?","trigger":"no","pattern":[0,0,0,0,0,1,0,0,0,1,4,0,2,3]},{"id":809,"text":"Does the door have hardware that require tight grasping, pinching or twisting of the wrist?","trigger":"yes","pattern":[0,0,0,0,0,1,0,0,0,4,0,0,1,1]},{"id":810,"text":"The vertical force required to open the door is more than 25N.","trigger":"yes","pattern":[0,0,0,0,2,2,2,0,3,2,4,0,2,2]},{"id":811,"text":"The horizontal force required to open the door is more than 25N.","trigger":"yes","pattern":[0,0,0,0,2,2,2,0,3,2,4,0,3,3]},{"id":812,"text":"Does the door open automatically through the use of a sensor, electronic device or push button, and is the automatic opening operable during an emergency?","trigger":"no","pattern":[1,0,0,0,2,2,1,0,3,3,4,0,2,2]},{"id":813,"text":"Does the  door stay in open position or stay open sufficient time to get through comfortably? (minimum 20 seconds)","trigger":"no","pattern":[0,1,2,0,3,3,2,0,0,0,0,0,3,3]},{"id":814,"text":"Are there thresholds higher than 15 mm? 30 mm is allowed if there are sloped edges.","trigger":"yes","pattern":[0,3,3,0,3,3,0,0,0,0,0,0,3,4]},{"id":815,"text":"Does the door have an glass section without contrasts?","trigger":"yes","pattern":[0,2,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":816,"text":"If there are two consecutive doors, e.g. vestibule, is the distance between the doors at least 120 cm plus the width of the doors when swinging into the space?","trigger":"no","pattern":[0,0,0,0,0,1,0,0,0,0,0,0,2,3]}],"outside":[{"id":901,"text":"Is the path to the assembly point at least 150 cm wide?","trigger":"no","pattern":[0,0,0,0,0,0,0,0,0,0,0,0,3,3]},{"id":902,"text":"The clear height of the path to the assembly point is at least 200 cm.","trigger":"no","pattern":[0,1,3,0,1,1,0,2,0,0,0,3,0,0]},{"id":903,"text":"Are there obstuctions, e.g. furniture, plants and/or equipment on the path to the assembly point?","trigger":"yes","pattern":[0,2,3,0,1,1,0,0,0,0,0,0,2,3]},{"id":904,"text":"Are there steep gradients on the path to the assembly point? (more than 1:20)","trigger":"yes","pattern":[0,0,0,0,3,3,3,0,0,0,0,0,3,4]},{"id":905,"text":"Are there sufficient tactile cues of abrupt level changes/other hazards?","trigger":"no","pattern":[0,2,4,0,0,0,0,0,0,0,0,0,0,0]},{"id":906,"text":"Is there a steep cross slope? (more than 1:48)","trigger":"yes","pattern":[0,0,0,0,3,3,3,0,0,0,0,0,3,4]},{"id":907,"text":"Are there high kerbs or steps on the path to the assembly point? (more than 4 cm)","trigger":"yes","pattern":[0,2,3,0,3,3,0,0,0,0,0,0,3,4]},{"id":908,"text":"The path to the assembly point is illogical and/or complicated. Examples include routes with many turns or routes that are hidden.","trigger":"yes","pattern":[3,1,3,0,0,0,0,0,0,0,0,0,0,0]},{"id":909,"text":"Visual contrast is provided on the path to the assembly point to minimize falling risks","trigger":"no","pattern":[1,3,0,0,0,0,0,0,0,0,0,0,0,0]},{"id":910,"text":"Is the surface regular/even surface (without joins, sloping sections, cracks, and holes larger than 5 mm in the direction of travel) and slip-free? Consider also the conditions in case of moderate rainfall.","trigger":"no","pattern":[0,2,3,0,2,2,0,0,0,0,0,0,3,3]},{"id":911,"text":"Is lighting sufficient, non-blinding and without sharp reflexes? Refers to both daytime and nighttime.","trigger":"no","pattern":[1,2,0,0,1,1,0,0,0,0,0,0,0,0]},{"id":912,"text":"Signs are posted and arranged along the path to the assembly point to adequately show how to get there and are clearly visible.","trigger":"no","pattern":[1,2,0,0,0,0,0,0,0,0,0,0,0,0]}]}};
+const FL = EE.FL;
+const FL_NAMES = {A:'Difficulty in interpreting information',B1:'Severe loss of sight',B2:'Complete loss of sight',C:'Severe loss of hearing',D:'Prevalence of poor balance',E:'Incoordination',F:'Limitations of stamina',G:'Difficulties in moving head',H:'Difficulty in reaching with arms',I:'Difficulty in handling and fingering',J:'Loss of upper extremity skills',K:'Difficulty in bending, kneeling, etc.',L:'Reliance on walking aids',M:'Wheelchair user'};
+const MAXV = {A:81,B1:141,B2:162,C:28,D:130,E:115,F:82,G:14,H:20,I:27,J:35,K:40,L:209,M:230};
+const MAXTOTAL = 1314;
+
+let subscales = [];   // {uid, type, name, weight, answers:{itemId:'yes'|'no'}}
+let uidc = 0;
+let baseline = null;  // {perFL:{}, total:n}
+let mode = 'live';
+
+// populate add-type select
+const sel = document.getElementById('add-type');
+Object.keys(EE.meta).forEach(k=>{
+  const o=document.createElement('option'); o.value=k; o.textContent=EE.meta[k].name; sel.appendChild(o);
+});
+
+function newSubscale(type,name){
+  const items = EE.components[type];
+  const answers={};
+  items.forEach(it=>answers[it.id]='yes'); // default = compliant
+  return {uid:++uidc,type,name:name||EE.meta[type].name,weight:1,answers,open:true};
+}
+function addSubscale(){
+  const type=sel.value; const name=document.getElementById('add-name').value.trim();
+  subscales.push(newSubscale(type,name));
+  document.getElementById('add-name').value='';
+  rebalance(type); render();
+}
+function rebalance(type){
+  // auto-distribute weights to sum to 1 within a type
+  const grp=subscales.filter(s=>s.type===type);
+  if(grp.length){const w=Math.round((1/grp.length)*1000)/1000; grp.forEach((s,i)=>s.weight = i===grp.length-1 ? Math.round((1-w*(grp.length-1))*1000)/1000 : w);}
+}
+function removeSub(uid){const s=subscales.find(x=>x.uid===uid);subscales=subscales.filter(x=>x.uid!==uid);if(s)rebalance(s.type);render();}
+
+// scoring ----------------------------------------------------
+function isFlagged(item,ans){ // flagged = the scoring (non-compliant) answer chosen
+  return ans===item.trigger;
+}
+function computeFL(){
+  const tot={}; FL.forEach(f=>tot[f]=0);
+  subscales.forEach(s=>{
+    const items=EE.components[s.type];
+    items.forEach(it=>{
+      if(isFlagged(it,s.answers[it.id])){
+        it.pattern.forEach((v,i)=>{ tot[FL[i]] += v * s.weight; });
+      }
+    });
+  });
+  FL.forEach(f=>tot[f]=Math.round(tot[f]*100)/100);
+  return tot;
+}
+function subScore(s){ // weighted total for one sub-scale (all FL)
+  let t=0; const items=EE.components[s.type];
+  items.forEach(it=>{ if(isFlagged(it,s.answers[it.id])) it.pattern.forEach(v=>t+=v*s.weight); });
+  return Math.round(t*10)/10;
+}
+function starsFor(score,max){
+  const r = max>0 ? score/max : 0;
+  if(r===0)return 4; if(r<0.25)return 3; if(r<0.5)return 2; if(r<0.75)return 1; return 0;
+}
+function starStr(n){let s='';for(let i=0;i<4;i++)s+= i<n?'★':'<span class="empty">★</span>';return s;}
+const ratingWords=['critical issue load','high issue load','moderate issues','minor issues','no issues found'];
+
+function barColor(ratio){
+  if(ratio<0.10) return 'var(--good)';
+  if(ratio<0.30) return 'var(--warn)';
+  return 'var(--bad)';
+}
+
+// render ------------------------------------------------------
+function render(){
+  renderSubscales();
+  renderResults();
+}
+function renderSubscales(){
+  const host=document.getElementById('subscales');
+  if(!subscales.length){
+    host.innerHTML='<div class="empty-state"><div class="big">No sub-scales yet</div>Add a component above, or hit <b>Load worked example</b> to start with a sample 2-storey public building.</div>';
+    return;
+  }
+  host.innerHTML='';
+  subscales.forEach(s=>{
+    const m=EE.meta[s.type]; const items=EE.components[s.type];
+    const flagged=items.filter(it=>isFlagged(it,s.answers[it.id])).length;
+    const block=document.createElement('div'); block.className='subscale';
+    block.innerHTML=`
+      <div class="sub-head ${s.open?'open':''}" onclick="toggleOpen(${s.uid},event)">
+        <span class="chev">▶</span>
+        <div>
+          <div class="type">${m.name}</div>
+          <h3>${esc(s.name)}</h3>
+        </div>
+        <div class="wmini" onclick="event.stopPropagation()">w
+          <input type="number" step="0.05" min="0" max="1" value="${s.weight}" onchange="setWeight(${s.uid},this.value)">
+        </div>
+        <div class="scoretag"><b>${subScore(s)}</b><br>${flagged} flagged</div>
+        <button class="pill" onclick="event.stopPropagation();removeSub(${s.uid})" title="Remove">✕</button>
+      </div>
+      <div class="items ${s.open?'':'collapsed'}">
+        ${items.map(it=>{
+          const ans=s.answers[it.id]; const fl=isFlagged(it,ans);
+          const compliantAns = it.trigger==='no'?'yes':'no';
+          return `<div class="item ${fl?'flagged':''}">
+            <div class="id">${it.id}</div>
+            <div>
+              <div class="txt">${esc(it.text)}</div>
+              <div class="meta">non-compliant answer: <b>${it.trigger.toUpperCase()}</b> · pattern&nbsp;[${it.pattern.join(',')}]</div>
+            </div>
+            <div class="toggle">
+              <button class="${ans==='yes'?(it.trigger==='yes'?'on-no':'on-yes'):''}" onclick="setAns(${s.uid},${it.id},'yes')">Yes</button>
+              <button class="${ans==='no'?(it.trigger==='no'?'on-no':'on-yes'):''}" onclick="setAns(${s.uid},${it.id},'no')">No</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    host.appendChild(block);
+  });
+}
+function renderResults(){
+  const cur=computeFL();
+  const total=Math.round(Object.values(cur).reduce((a,b)=>a+b,0)*10)/10;
+  document.getElementById('tees').textContent=total;
+  const os=starsFor(total,MAXTOTAL);
+  document.getElementById('overall-stars').innerHTML=starStr(os);
+  document.getElementById('overall-word').textContent=ratingWords[os];
+
+  if(mode==='live'){
+    const host=document.getElementById('fl-bars'); host.innerHTML='';
+    FL.forEach(f=>{
+      const v=cur[f]; const ratio=v/MAXV[f];
+      const row=document.createElement('div'); row.className='barrow-wide'; row.title=FL_NAMES[f];
+      row.innerHTML=`<div class="code">${f}</div>
+        <div>
+          <div class="lbl">${FL_NAMES[f]}</div>
+          <div class="bartrack"><div class="barfill" style="width:${Math.min(100,ratio*100)}%;background:${barColor(ratio)}"></div></div>
+        </div>
+        <div class="barval">${v}</div>`;
+      host.appendChild(row);
+    });
+  } else {
+    renderImpact(cur,total);
+  }
+}
+function renderImpact(cur,total){
+  const host=document.getElementById('impact-bars'); host.innerHTML='';
+  const st=document.getElementById('baseline-status');
+  if(!baseline){ st.textContent='No baseline saved — set your "before" design, save it, then make changes.'; host.innerHTML=''; return; }
+  st.innerHTML=`Baseline TEES = <b>${baseline.total}</b> · current = <b>${total}</b> · Δ = <b>${(total-baseline.total>0?'+':'')}${Math.round((total-baseline.total)*10)/10}</b>`;
+  // max abs delta for scaling
+  let maxd=1; FL.forEach(f=>maxd=Math.max(maxd,Math.abs(cur[f]-baseline.perFL[f])));
+  FL.forEach(f=>{
+    const d=Math.round((cur[f]-baseline.perFL[f])*10)/10;
+    const w=Math.abs(d)/maxd*50; // half-width %
+    const pos=d>0; // worse
+    const row=document.createElement('div'); row.className='barrow'; row.title=FL_NAMES[f];
+    row.style.gridTemplateColumns='30px 1fr 46px';
+    row.innerHTML=`<div class="code">${f}</div>
+      <div class="bartrack" style="background:#ece8da;position:relative">
+        <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line)"></div>
+        <div class="barfill" style="position:absolute;${pos?'left:50%':'right:50%'};width:${w}%;background:${d===0?'var(--line)':(pos?'var(--bad)':'var(--good)')}"></div>
+      </div>
+      <div class="barval delta" style="color:${d>0?'var(--bad)':d<0?'var(--good)':'var(--muted)'}">${d>0?'+':''}${d}</div>`;
+    host.appendChild(row);
+  });
+}
+
+// interactions ------------------------------------------------
+function setAns(uid,id,val){const s=subscales.find(x=>x.uid===uid);if(s){s.answers[id]=val;render();}}
+function setWeight(uid,val){const s=subscales.find(x=>x.uid===uid);if(s){s.weight=parseFloat(val)||0;render();}}
+function toggleOpen(uid,e){const s=subscales.find(x=>x.uid===uid);if(s){s.open=!s.open;render();}}
+function setMode(m){mode=m;
+  document.getElementById('mode-live').classList.toggle('on',m==='live');
+  document.getElementById('mode-impact').classList.toggle('on',m==='impact');
+  document.getElementById('live-view').style.display=m==='live'?'block':'none';
+  document.getElementById('impact-view').style.display=m==='impact'?'block':'none';
+  renderResults();
+}
+function saveBaseline(){const cur=computeFL();baseline={perFL:cur,total:Math.round(Object.values(cur).reduce((a,b)=>a+b,0)*10)/10};renderResults();}
+function clearBaseline(){baseline=null;renderResults();}
+
+function resetAll(){subscales.forEach(s=>{const items=EE.components[s.type];items.forEach(it=>s.answers[it.id]='yes');});render();}
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+// worked example: a small 2-storey public building with realistic faults ---
+function loadExample(){
+  subscales=[];uidc=0;
+  const add=(type,name,flagged)=>{const s=newSubscale(type,name);
+    (flagged||[]).forEach(id=>{const it=EE.components[type].find(x=>x.id===id);if(it)s.answers[id]=it.trigger;});
+    s.open=false; subscales.push(s);};
+  // Notification — one system, two faults (no visual alarm, no low-freq for sleeping N/A)
+  add('notification','Building-wide alarm',[104,102]);
+  // Signage — decent but no tactile, no audio
+  add('signage','Standard signage',[202,208,211,212]);
+  // Two circulation spaces, weighted
+  add('circulation','Level 1 — open foyer',[303,310,314]);
+  add('circulation','Level 2 — corridor wing',[302,304,307,317,321]);
+  rebalance('circulation');
+  // Refuge area present but one-way comms only
+  add('refuge','Level 2 refuge',[403,406,411,412]);
+  // No OEE, no ramp -> represented by leaving them absent (user can discuss)
+  // One stair with several faults
+  add('stair','North egress stair',[701,706,709,719,720]);
+  // Doors
+  add('door','Main exit doors',[802,808,814]);
+  // Outside environment
+  add('outside','Path to assembly point',[903,907,912]);
+  render();
+  // auto-save baseline so Impact mode is instantly meaningful
+  saveBaseline();
+}
+
+function exportCSV(){
+  const cur=computeFL();
+  let rows=[['Sub-scale','Type','Weight','Flagged items','Weighted score']];
+  subscales.forEach(s=>{
+    const items=EE.components[s.type];
+    const fl=items.filter(it=>isFlagged(it,s.answers[it.id])).map(it=>it.id).join(' ');
+    rows.push([s.name,EE.meta[s.type].name,s.weight,fl,subScore(s)]);
+  });
+  rows.push([]);
+  rows.push(['Functional limitation','Code','EES','Max','% of max']);
+  FL.forEach(f=>rows.push([FL_NAMES[f],f,cur[f],MAXV[f],(MAXV[f]?Math.round(cur[f]/MAXV[f]*1000)/10:0)+'%']));
+  rows.push([]);
+  rows.push(['Total EES',Math.round(Object.values(cur).reduce((a,b)=>a+b,0)*10)/10,'of',MAXTOTAL]);
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='egress_enabler_assessment.csv';a.click();
+}
+
+function renderPersonalComponent(){
+  const host=document.getElementById('pc-list'); if(!host) return;
+  host.innerHTML=FL.map(f=>`<div class="pc-row">
+      <div class="pc-code">${f}</div>
+      <div><div class="pc-name">${FL_NAMES[f]}</div><div class="pc-max">max score ${MAXV[f]}</div></div>
+    </div>`).join('');
+}
+
+renderPersonalComponent();
+render();
+</script>
+</body>
+</html>
